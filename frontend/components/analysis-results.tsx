@@ -15,17 +15,22 @@ import { ChecklistCard } from "@/components/results/checklist-card";
 import { DeadlinesCard } from "@/components/results/deadlines-card";
 import { ReplyDraftCard } from "@/components/results/reply-draft-card";
 import { useToast } from "@/components/toast-provider";
-import type { AnalysisResult } from "@/lib/mock-data";
+
+type Options = {
+  includeSummary: boolean;
+  includeChecklist: boolean;
+  includeDeadlines: boolean;
+  includeReply: boolean;
+};
+
+type ApiResponse = {
+  results: Record<string, any>;
+};
 
 interface AnalysisResultsProps {
-  results: AnalysisResult | null;
+  results: ApiResponse | null;
   isLoading: boolean;
-  options: {
-    includeSummary: boolean;
-    includeChecklist: boolean;
-    includeDeadlines: boolean;
-    includeReply: boolean;
-  };
+  options: Options;
 }
 
 function ResultsSkeleton() {
@@ -54,19 +59,24 @@ function EmptyState() {
         </div>
         <h3 className="mb-1 font-semibold">No results yet</h3>
         <p className="text-sm text-muted-foreground">
-          Paste a letter and click Analyze to see results here.
+          Provide a letter and click Analyze to see results here.
         </p>
       </CardContent>
     </Card>
   );
 }
 
-export function AnalysisResults({ results, isLoading, options }: AnalysisResultsProps) {
+export function AnalysisResults({
+  results,
+  isLoading,
+  options,
+}: AnalysisResultsProps) {
   const { showToast } = useToast();
 
   const handleExportJSON = () => {
-    showToast("JSON copied to clipboard");
+    if (!results) return;
     navigator.clipboard.writeText(JSON.stringify(results, null, 2));
+    showToast("JSON copied to clipboard");
   };
 
   const handleExportTXT = () => {
@@ -95,6 +105,8 @@ export function AnalysisResults({ results, isLoading, options }: AnalysisResults
     );
   }
 
+  const data = results.results ?? {};
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -120,12 +132,21 @@ export function AnalysisResults({ results, isLoading, options }: AnalysisResults
       </div>
 
       <div className="space-y-4">
-        {options.includeSummary && (
-          <SummaryCard summary={results.summary} keyPoints={results.key_points} />
+        {options.includeSummary && typeof data.summary === "string" && (
+          <SummaryCard summary={data.summary} keyPoints={[]} />
         )}
-        {options.includeChecklist && <ChecklistCard actions={results.actions} />}
-        {options.includeDeadlines && <DeadlinesCard deadlines={results.deadlines} />}
-        {options.includeReply && <ReplyDraftCard initialDraft={results.reply_draft} />}
+
+        {options.includeChecklist && Array.isArray(data.checklist) && (
+          <ChecklistCard actions={data.checklist} />
+        )}
+
+        {options.includeDeadlines && Array.isArray(data.deadlines) && (
+          <DeadlinesCard deadlines={data.deadlines} />
+        )}
+
+        {options.includeReply && typeof data.reply_draft === "string" && (
+          <ReplyDraftCard initialDraft={data.reply_draft} />
+        )}
       </div>
     </div>
   );

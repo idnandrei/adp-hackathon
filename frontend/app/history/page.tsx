@@ -2,8 +2,13 @@ import Link from "next/link";
 import { Header } from "@/components/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockHistoryData } from "@/lib/mock-data";
-import { FileText, ChevronRight, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  FileText,
+  ChevronRight,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -32,7 +37,18 @@ const statusConfig = {
   },
 };
 
+type HistoryItem = {
+  id: string;
+  title: string;
+  date: string;
+  status: "analyzed" | "pending" | "error";
+  preview: string;
+};
+
 export default function HistoryPage() {
+  // MVP: no history API yet
+  const history: HistoryItem[] = [];
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -45,7 +61,7 @@ export default function HistoryPage() {
             </p>
           </div>
 
-          {mockHistoryData.length === 0 ? (
+          {history.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -59,7 +75,7 @@ export default function HistoryPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {mockHistoryData.map((item) => {
+              {history.map((item) => {
                 const status = statusConfig[item.status];
                 const StatusIcon = status.icon;
                 return (
@@ -71,8 +87,13 @@ export default function HistoryPage() {
                         </div>
                         <div className="flex-1 overflow-hidden">
                           <div className="flex items-center gap-2">
-                            <h3 className="truncate font-medium">{item.title}</h3>
-                            <Badge variant={status.variant} className="shrink-0 gap-1">
+                            <h3 className="truncate font-medium">
+                              {item.title}
+                            </h3>
+                            <Badge
+                              variant={status.variant}
+                              className="shrink-0 gap-1"
+                            >
                               <StatusIcon className="h-3 w-3" />
                               {status.label}
                             </Badge>

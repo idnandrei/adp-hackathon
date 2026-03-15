@@ -1,37 +1,56 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Sparkles, FileUp, RotateCcw, Camera, X, FileText, Image as ImageIcon } from "lucide-react";
+import {
+  Sparkles,
+  FileUp,
+  RotateCcw,
+  Camera,
+  X,
+  FileText,
+  Image as ImageIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import { sampleLetter } from "@/lib/mock-data";
 import { useToast } from "@/components/toast-provider";
 
+type AnalyzeOptions = {
+  includeSummary: boolean;
+  includeChecklist: boolean;
+  includeDeadlines: boolean;
+  includeReply: boolean;
+};
+
 interface AnalyzeFormProps {
-  onAnalyze: (
-    text: string,
-    options: {
-      includeSummary: boolean;
-      includeChecklist: boolean;
-      includeDeadlines: boolean;
-      includeReply: boolean;
-    }
-  ) => void;
+  onAnalyze: (params: {
+    letterText?: string;
+    letterFile?: File | null;
+    options: AnalyzeOptions;
+  }) => void;
   onReset: () => void;
   isLoading: boolean;
   hasResults: boolean;
 }
 
-export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: AnalyzeFormProps) {
+export function AnalyzeForm({
+  onAnalyze,
+  onReset,
+  isLoading,
+  hasResults,
+}: AnalyzeFormProps) {
   const { showToast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<"paste" | "pdf" | "photo">(
+    "paste",
+  );
+
   const [text, setText] = useState("");
-  const [options, setOptions] = useState({
+  const [options, setOptions] = useState<AnalyzeOptions>({
     includeSummary: true,
     includeChecklist: true,
     includeDeadlines: true,
@@ -40,6 +59,7 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
   const [error, setError] = useState("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,72 +67,90 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
   const maxChars = 10000;
 
   const handleUseSample = () => {
+    setActiveTab("paste");
+    setUploadedFile(null);
     setText(sampleLetter);
     showToast("Sample letter loaded", "info");
   };
 
   const handleSubmit = () => {
-    if (!text.trim()) {
-      setError("Please enter some text to analyze");
+    setError("");
+
+    const hasFile = uploadedFile !== null;
+    const hasText = Boolean(text.trim());
+
+    if (activeTab === "paste") {
+      if (!hasText) {
+        setError("Please enter some text to analyze");
+        return;
+      }
+      onAnalyze({ letterText: text, letterFile: null, options });
       return;
     }
-    setError("");
-    onAnalyze(text, options);
+
+    // pdf/photo tabs: we send the file to backend for OCR
+    if (!hasFile) {
+      setError("Please upload a file to analyze");
+      return;
+    }
+
+    onAnalyze({ letterFile: uploadedFile, options });
   };
 
   const handleReset = () => {
+    setActiveTab("paste");
     setText("");
     setError("");
+    setUploadedFile(null);
+    setIsExtracting(false);
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
+    if (photoInputRef.current) photoInputRef.current.value = "";
     onReset();
   };
 
-  const toggleOption = (key: keyof typeof options) => {
+  const toggleOption = (key: keyof AnalyzeOptions) => {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleFileUpload = async (file: File, type: "pdf" | "photo") => {
+  // UI-only: show "extracting" spinner; backend does real OCR.
+  const handleFileUpload = async (file: File) => {
     setUploadedFile(file);
     setIsExtracting(true);
     setError("");
-    
-    // Simulate text extraction delay
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    // For prototype: simulate extracted text
-    const extractedText = type === "pdf" 
-      ? `[Extracted from PDF: ${file.name}]\n\n${sampleLetter}`
-      : `[Extracted from photo: ${file.name}]\n\n${sampleLetter}`;
-    
-    setText(extractedText);
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
     setIsExtracting(false);
-    showToast(`Text extracted from ${file.name}`, "success");
+    showToast(`File ready: ${file.name}`, "success");
   };
 
   const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.type !== "application/pdf") {
-        setError("Please select a PDF file");
-        return;
-      }
-      handleFileUpload(file, "pdf");
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setError("Please select a PDF file");
+      return;
     }
+    setActiveTab("pdf");
+    setText(""); // enforce exclusive input mode
+    handleFileUpload(file);
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith("image/")) {
-        setError("Please select an image file");
-        return;
-      }
-      handleFileUpload(file, "photo");
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file");
+      return;
     }
+    setActiveTab("photo");
+    setText(""); // enforce exclusive input mode
+    handleFileUpload(file);
   };
 
   const clearFile = () => {
     setUploadedFile(null);
-    setText("");
+    setIsExtracting(false);
     if (pdfInputRef.current) pdfInputRef.current.value = "";
     if (photoInputRef.current) photoInputRef.current.value = "";
   };
@@ -123,7 +161,20 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
         <CardTitle className="text-base">Input</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Tabs defaultValue="paste">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            const next = v as "paste" | "pdf" | "photo";
+            setActiveTab(next);
+            setError("");
+            // enforce "text OR file"
+            if (next === "paste") {
+              clearFile();
+            } else {
+              setText("");
+            }
+          }}
+        >
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="paste">Paste text</TabsTrigger>
             <TabsTrigger value="pdf">
@@ -135,6 +186,7 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
               Upload Photo
             </TabsTrigger>
           </TabsList>
+
           <TabsContent value="paste" className="mt-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -162,13 +214,17 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
                 className="min-h-[200px] resize-y"
               />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className={charCount > maxChars ? "text-destructive" : ""}>
-                  {charCount.toLocaleString()} / {maxChars.toLocaleString()} characters
+                <span
+                  className={charCount > maxChars ? "text-destructive" : ""}
+                >
+                  {charCount.toLocaleString()} / {maxChars.toLocaleString()}{" "}
+                  characters
                 </span>
                 {error && <span className="text-destructive">{error}</span>}
               </div>
             </div>
           </TabsContent>
+
           <TabsContent value="pdf" className="mt-3">
             <input
               ref={pdfInputRef}
@@ -183,15 +239,24 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
                 {isExtracting ? (
                   <>
                     <Spinner className="mb-2 h-8 w-8" />
-                    <p className="text-sm font-medium">Extracting text...</p>
-                    <p className="text-xs text-muted-foreground">{uploadedFile.name}</p>
+                    <p className="text-sm font-medium">Preparing...</p>
+                    <p className="text-xs text-muted-foreground">
+                      {uploadedFile.name}
+                    </p>
                   </>
                 ) : (
                   <>
                     <FileText className="mb-2 h-8 w-8 text-primary" />
                     <p className="text-sm font-medium">{uploadedFile.name}</p>
-                    <p className="text-xs text-muted-foreground mb-3">Text extracted successfully</p>
-                    <Button variant="outline" size="sm" onClick={clearFile} className="gap-1.5">
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Ready to OCR on Analyze
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFile}
+                      className="gap-1.5"
+                    >
                       <X className="h-3 w-3" />
                       Remove file
                     </Button>
@@ -205,10 +270,13 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
               >
                 <FileUp className="mb-2 h-8 w-8 text-muted-foreground" />
                 <p className="text-sm font-medium">Click to upload PDF</p>
-                <p className="text-xs text-muted-foreground">or drag and drop</p>
+                <p className="text-xs text-muted-foreground">
+                  or drag and drop
+                </p>
               </label>
             )}
           </TabsContent>
+
           <TabsContent value="photo" className="mt-3">
             <input
               ref={photoInputRef}
@@ -223,15 +291,24 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
                 {isExtracting ? (
                   <>
                     <Spinner className="mb-2 h-8 w-8" />
-                    <p className="text-sm font-medium">Running OCR...</p>
-                    <p className="text-xs text-muted-foreground">{uploadedFile.name}</p>
+                    <p className="text-sm font-medium">Preparing...</p>
+                    <p className="text-xs text-muted-foreground">
+                      {uploadedFile.name}
+                    </p>
                   </>
                 ) : (
                   <>
                     <ImageIcon className="mb-2 h-8 w-8 text-primary" />
                     <p className="text-sm font-medium">{uploadedFile.name}</p>
-                    <p className="text-xs text-muted-foreground mb-3">Text extracted successfully</p>
-                    <Button variant="outline" size="sm" onClick={clearFile} className="gap-1.5">
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Ready to OCR on Analyze
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFile}
+                      className="gap-1.5"
+                    >
                       <X className="h-3 w-3" />
                       Remove file
                     </Button>
@@ -245,7 +322,9 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
               >
                 <Camera className="mb-2 h-8 w-8 text-muted-foreground" />
                 <p className="text-sm font-medium">Click to upload photo</p>
-                <p className="text-xs text-muted-foreground">JPG, PNG, or HEIC</p>
+                <p className="text-xs text-muted-foreground">
+                  JPG, PNG, or HEIC
+                </p>
               </label>
             )}
           </TabsContent>
@@ -265,8 +344,10 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
                 <div key={key} className="flex items-center gap-2">
                   <Switch
                     id={key}
-                    checked={options[key as keyof typeof options]}
-                    onCheckedChange={() => toggleOption(key as keyof typeof options)}
+                    checked={options[key as keyof AnalyzeOptions]}
+                    onCheckedChange={() =>
+                      toggleOption(key as keyof AnalyzeOptions)
+                    }
                   />
                   <Label htmlFor={key} className="text-sm font-normal">
                     {label}
@@ -280,7 +361,12 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
         {/* Actions */}
         <div className="flex gap-2 border-t border-border pt-4">
           {hasResults && (
-            <Button type="button" variant="outline" onClick={handleReset} className="gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReset}
+              className="gap-1.5"
+            >
               <RotateCcw className="h-4 w-4" />
               Reset
             </Button>
@@ -288,13 +374,18 @@ export function AnalyzeForm({ onAnalyze, onReset, isLoading, hasResults }: Analy
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={isLoading}
+            disabled={isLoading || isExtracting}
             className="flex-1 gap-1.5"
           >
             {isLoading ? (
               <>
                 <Spinner className="h-4 w-4" />
                 Analyzing...
+              </>
+            ) : isExtracting ? (
+              <>
+                <Spinner className="h-4 w-4" />
+                Preparing...
               </>
             ) : (
               <>
