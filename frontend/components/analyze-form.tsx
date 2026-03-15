@@ -28,6 +28,7 @@ type AnalyzeOptions = {
 
 interface AnalyzeFormProps {
   onAnalyze: (params: {
+    emailContent?: string;
     letterText?: string;
     letterFile?: File | null;
     options: AnalyzeOptions;
@@ -50,6 +51,7 @@ export function AnalyzeForm({
   );
 
   const [text, setText] = useState("");
+  const [email, setEmail] = useState("");
   const [options, setOptions] = useState<AnalyzeOptions>({
     includeSummary: true,
     includeChecklist: true,
@@ -84,7 +86,12 @@ export function AnalyzeForm({
         setError("Please enter some text to analyze");
         return;
       }
-      onAnalyze({ letterText: text, letterFile: null, options });
+      onAnalyze({
+        emailContent: email,
+        letterText: text,
+        letterFile: null,
+        options,
+      });
       return;
     }
 
@@ -94,11 +101,16 @@ export function AnalyzeForm({
       return;
     }
 
-    onAnalyze({ letterFile: uploadedFile, options });
+    onAnalyze({
+      emailContent: email,
+      letterFile: uploadedFile,
+      options,
+    });
   };
 
   const handleReset = () => {
     setActiveTab("paste");
+    setEmail("");
     setText("");
     setError("");
     setUploadedFile(null);
@@ -161,6 +173,23 @@ export function AnalyzeForm({
         <CardTitle className="text-base">Input</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Optional Email Content Input */}
+        <div className="space-y-2">
+          <Label htmlFor="email-content" className="text-sm">
+            Email content <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Textarea
+            id="email-content"
+            placeholder="Paste the email that came with the attachment..."
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="min-h-[80px] resize-y"
+          />
+          <p className="text-xs text-muted-foreground">
+            Include the email body for additional context
+          </p>
+        </div>
+
         <Tabs
           value={activeTab}
           onValueChange={(v) => {

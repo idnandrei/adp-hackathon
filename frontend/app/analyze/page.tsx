@@ -21,11 +21,16 @@ type Options = {
 type ApiResponse = { results: Record<string, any> };
 
 async function analyzeWithBackend(params: {
+  emailContent?: string;
   letterText?: string;
   letterFile?: File | null;
   options: Options;
 }): Promise<ApiResponse> {
   const form = new FormData();
+
+  if (params.emailContent) {
+    form.append("email_content", params.emailContent);
+  }
 
   form.append("summary", String(params.options.includeSummary));
   form.append("checklist", String(params.options.includeChecklist));
@@ -62,6 +67,7 @@ export default function AnalyzePage() {
   });
 
   const handleAnalyze = async (params: {
+    emailContent?: string;
     letterText?: string;
     letterFile?: File | null;
     options: Options;
